@@ -1,0 +1,21 @@
+__pycache__/
+*.py[cod]
+*.bak
+.ipynb_checkpoints/
+
+# Run outputs
+wandb/
+logs/
+work_dirs/
+outputs/
+checkpoints/
+
+# Weights
+*.pth
+*.pt
+*.bin
+*.ckpt
+*.safetensors
+
+.DS_Store
+.vscode/
