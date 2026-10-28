@@ -134,11 +134,11 @@ class LLaVADataset(Dataset):
         self.tokenizer = tokenizer
 
         if phase == "pretrain":
-            data_file_path = "/mnt/bn/vgfm2/test_dit/blip_laion_cc_sbu_558k.json"
-            self.image_root = "/mnt/bn/vgfm2/test_dit/pretraining_data"
+            data_file_path = "data/LLaVA-Instruct-150K/blip_laion_cc_sbu_558k.json"
+            self.image_root = "data/LLaVA-Instruct-150K/pretraining_data"
         else:
-            data_file_path = "/mnt/bn/vgfm2/test_dit/llava_v1_5_mix665k.json"
-            self.image_root = "/mnt/bn/vgfm2/test_dit/tuning_data"
+            data_file_path = "data/LLaVA-Instruct-150K/llava_v1_5_mix665k.json"
+            self.image_root = "data/LLaVA-Instruct-150K/tuning_data"
 
         with open(data_file_path, 'r') as f:
             data = json.load(f)
@@ -246,6 +246,7 @@ def get_instruct_data_loader(
         local_rank,
         max_length,
         phase,
+        resolution=512,
 ):
     train_dataset = LLaVADataset(
         tokenizer,

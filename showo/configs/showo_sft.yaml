@@ -1,0 +1,116 @@
+# ══════════════════════════════════════════════════════════════════════
+# Show-o Pure SFT (no HASVR baseline)
+# ══════════════════════════════════════════════════════════════════════
+# Training script: training/train_sft.py
+#
+# Two losses only:
+#   loss_t2i — masked token prediction (image generation)
+#   loss_mmu — next-token prediction (multimodal understanding)
+# ══════════════════════════════════════════════════════════════════════
+
+wandb:
+  entity: null
+  resume: "auto"
+
+experiment:
+  project: "SFT-Showo-Baseline"
+  name: "show-o-sft-baseline"
+  output_dir: "/data1/showo_work_dirs/show-o-sft-baseline"
+  max_train_examples_t2i: 20000000
+  max_train_examples_mmu: 40000000
+  save_every: 1000
+  generate_every: 2000
+  log_every: 5
+  log_grad_norm_every: 500
+  resume_from_checkpoint: "latest"
+  checkpoints_total_limit: 5
+
+model:
+  vq_model:
+    type: "magvitv2"
+    vq_model_name: "/data1/hug_cache/hub/models--showlab--magvitv2/snapshots/5c3fa78f8b3523347c5cd1a4c97f3c4e96f33d5d"
+
+  showo:
+    load_from_showo: True
+    pretrained_model_path: "/home/szgx/Desktop/ctl/Show-o/show-o2/weights/showlab/show-o-512x512"
+    w_clip_vit: False
+    w_asvr: True
+    asvr_hidden_dim: 2048
+    vocab_size: 58498
+    llm_vocab_size: 50295
+    llm_model_path: "/data1/hug_cache/hub/models--microsoft--phi-1_5/snapshots/77aa61eeac94fbf33d492b9f2744c98b42d5b5eb"
+    codebook_size: 8192
+    num_vq_tokens: 1024
+    num_new_special_tokens: 10
+
+  vision_tokenizer:
+    config_path: "/data1/model_weight/vision_tower_RVQ8_False_1152_epoch_6"
+    weights_path: "/data1/model_weight/epoch_6.pt"
+    num_semantic_tokens: 729
+    semantic_depth: 8
+
+  gradient_checkpointing: True
+
+dataset:
+  gen_type: "t2i"
+  und_type: "llava_tuning"
+  combined_loader_mode: "min_size"
+  add_system_prompt: False
+  params:
+    train_t2i_shards_path_or_url: ["/data1/Data/BLIP3o-60k/journeyDB.tar"]
+    add_caption_prompt: True
+    external_caption_path: ""
+    external_journeydb_caption_path: ""
+    external_laion12m_caption_path: ""
+    external_cc12m_caption_path: ""
+    validation_prompts_file: "validation_prompts/text2image_prompts.txt"
+    shuffle_buffer_size: 1000
+    num_workers: 12
+    resolution: 512
+    pin_memory: True
+    persistent_workers: True
+  preprocessing:
+    max_seq_length: 128
+    resolution: 512
+    center_crop: False
+    random_flip: False
+
+optimizer:
+  name: adamw
+  params:
+    learning_rate: 5e-07
+    asvr_learning_rate: 5e-05
+    scale_lr: False
+    beta1: 0.9
+    beta2: 0.999
+    weight_decay: 0.01
+    epsilon: 1e-8
+
+lr_scheduler:
+  scheduler: "cosine"
+  params:
+    learning_rate: ${optimizer.params.learning_rate}
+    warmup_steps: 200
+
+training:
+  gradient_accumulation_steps: 5
+  noise_type: "mask"
+  batch_size_t2i: 1
+  batch_size_mmu: 2
+  mixed_precision: "bf16"
+  enable_tf32: True
+  seed: 10086
+  max_train_steps: 50000
+  min_masking_rate: 0.0
+  cond_dropout_prob: 0.1
+  label_smoothing: 0.0
+  max_grad_norm: 1.0
+  guidance_scale: 0.0
+  generation_timesteps: 12
+  t2i_coeff: 1.0
+  mmu_coeff: 1.0
+  asvr_coeff: 0.0
+
+  hierarchical_asvr:
+    layer_indices: [8, 16, 24]
+    depth_ranges: [[0, 2], [0, 5], [0, 8]]

@@ -33,17 +33,19 @@ class Showo(ModelMixin, ConfigMixin):
             codebook_size=8192,
             num_vq_tokens=256,
             load_from_showo=True,
+            w_asvr=False,
+            asvr_hidden_dim=2048,
             **kwargs,
     ):
         super().__init__()
         self.vocab_size = vocab_size
         self.register_to_config(mask_token_id=vocab_size - 1)
         if load_from_showo:
-            config = AutoConfig.from_pretrained(llm_model_path)
+            config = AutoConfig.from_pretrained(llm_model_path, local_files_only=True)
             self.showo = PhiForCausalLM(config)
         else:
             self.showo = PhiForCausalLM.from_pretrained(llm_model_path, attn_implementation='sdpa')
-        self.showo.resize_token_embeddings(self.vocab_size)
+        self.showo.resize_token_embeddings(self.vocab_size, mean_resizing=False)
         self.output_size = self.vocab_size
 
         if self.w_clip_vit:
@@ -51,6 +53,14 @@ class Showo(ModelMixin, ConfigMixin):
                 torch.nn.Linear(1024, 2048),
                 torch.nn.GELU(),
                 torch.nn.Linear(2048, 2048)
+            )
+
+        if w_asvr:
+            llm_hidden_size = self.showo.config.hidden_size
+            self.asvr_projector = torch.nn.Sequential(
+                torch.nn.Linear(llm_hidden_size, asvr_hidden_dim),
+                torch.nn.GELU(),
+                torch.nn.Linear(asvr_hidden_dim, asvr_hidden_dim)
             )
 
     def _set_gradient_checkpointing(self, module, value=False):
@@ -69,36 +79,46 @@ class Showo(ModelMixin, ConfigMixin):
             max_seq_length=128,
             labels_mask_text=None,
             labels_mask_image=None,
+            return_hidden_states=False,
             **kwargs,
     ):
 
         if input_embeddings is None:
-            logits = self.showo(input_ids=input_ids, attention_mask=attention_mask)['logits']
+            outputs = self.showo(input_ids=input_ids, attention_mask=attention_mask,
+                                 output_hidden_states=return_hidden_states)
         else:
-            logits = self.showo(inputs_embeds=input_embeddings, attention_mask=attention_mask)['logits']
+            outputs = self.showo(inputs_embeds=input_embeddings, attention_mask=attention_mask,
+                                 output_hidden_states=return_hidden_states)
+
+        logits = outputs['logits']
+        hidden_states = outputs.get('hidden_states', None)
 
         if labels is not None:
-            # 1. Mask token prediction (discrete diffusion) for image generation
-            # Note that, max_seq_length indicates the maximum number of text tokens, maybe a bit confused.
             loss_t2i = F.cross_entropy(
                 logits[:batch_size_t2i, max_seq_length + 1:].contiguous().view(-1, self.output_size),
                 labels[:batch_size_t2i, max_seq_length + 1:].contiguous().view(-1), ignore_index=-100,
             )
 
-            # 2. Next token prediction for language modeling
             loss_lm = F.cross_entropy(
                 logits[batch_size_t2i:batch_size_t2i + batch_size_lm, :-1].contiguous().view(-1, self.output_size),
                 labels[batch_size_t2i:batch_size_t2i + batch_size_lm, 1:].contiguous().view(-1), ignore_index=-100,
             )
 
-            # 3. Next token prediction for captioning/multimodal understanding
             loss_mmu = F.cross_entropy(
                 logits[-batch_size_mmu:, :-1].contiguous().view(-1, self.output_size),
                 labels[-batch_size_mmu:, 1:].contiguous().view(-1), ignore_index=-100,
             )
 
+            if return_hidden_states and hidden_states is not None:
+                if kwargs.get('return_all_hidden_states', False):
+                    return logits, loss_t2i, loss_lm, loss_mmu, hidden_states
+                return logits, loss_t2i, loss_lm, loss_mmu, hidden_states[-1]
             return logits, loss_t2i, loss_lm, loss_mmu
 
+        if return_hidden_states and hidden_states is not None:
+            if kwargs.get('return_all_hidden_states', False):
+                return logits, hidden_states
+            return logits, hidden_states[-1]
         return logits
 
     def t2i_generate(

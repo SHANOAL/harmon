@@ -2,7 +2,7 @@ from xtuner.utils import PROMPT_TEMPLATE
 from transformers import AutoTokenizer
 
 
-llm_name_or_path = 'Qwen/Qwen2.5-1.5B-Instruct'
+llm_name_or_path = '/home/szgx/Desktop/ctl/Show-o/show-o2/weights/Qwen2.5-1.5B-Instruct'
 prompt_template = PROMPT_TEMPLATE.qwen_chat
 pad_index = 151645
 image_length = 1024 + 64

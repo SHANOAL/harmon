@@ -176,7 +176,7 @@ class AverageMeter(object):
         self.avg = self.sum / self.count
 
 from torchvision import transforms
-def image_transform(image, resolution=256, normalize=True):
+def image_transform(image, resolution=512, normalize=True):
     image = transforms.Resize(resolution, interpolation=transforms.InterpolationMode.BICUBIC)(image)
     image = transforms.CenterCrop((resolution, resolution))(image)
     image = transforms.ToTensor()(image)
